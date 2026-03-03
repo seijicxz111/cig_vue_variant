@@ -683,7 +683,7 @@ $user_name    = $_SESSION['admin_email'] ?? 'Admin';
 
     <div class="error-alert" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;margin-bottom:20px;">
       <i class="fas fa-shield-alt"></i>
-      <span><strong>Security Notice:</strong> Restrict access to this file after creating accounts. Do not leave it publicly accessible.</span>
+      <span><strong>Security Notice:</strong> Restrict access to this page after creating accounts. Do not leave it publicly accessible.</span>
     </div>
 
     <button onclick="showCreateUser()" class="btn-action btn-view" style="margin-bottom:20px;">
