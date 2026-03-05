@@ -25,9 +25,9 @@ $conn->close();
 
 if (!$row) { http_response_code(404); die("Not found"); }
 
-// Resolve path — stored as ../uploads/submissions/filename.ext (relative to user-side)
-$uploadsBase = 'C:/xampp/htdocs/ciguser/org-dashboard/';
-$diskPath    = $uploadsBase . ltrim(str_replace('\\', '/', $row['file_path']), './');
+// cig_superadmin/pages/ → ../../cig_user/org-dashboard/uploads/submissions/
+$uploadsDir = realpath(__DIR__ . '/../../cig_user/org-dashboard/uploads/submissions');
+$diskPath   = $uploadsDir . '/' . basename($row['file_name']);
 
 if (!file_exists($diskPath)) {
     http_response_code(404);

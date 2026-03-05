@@ -24,8 +24,6 @@ $notifications = $notifications ?? [];
   <a href="submissions.php" class="nav-link <?php echo $current_page === 'submissions' ? 'active' : ''; ?>" data-page="submissions"><i></i> <span>Submissions</span></a>
   <a href="review.php" class="nav-link <?php echo $current_page === 'review' ? 'active' : ''; ?>" data-page="review"><i></i> <span>Review & Approval</span></a>
   <a href="archive.php" class="nav-link <?php echo $current_page === 'archive' ? 'active' : ''; ?>" data-page="archive"><i></i> <span>Document Archive</span></a>
-  <a href="organizations.php" class="nav-link <?php echo $current_page === 'organizations' ? 'active' : ''; ?>" data-page="organizations"><i></i> <span>Organizations</span></a>
-  <a href="reports.php" class="nav-link <?php echo $current_page === 'reports' ? 'active' : ''; ?>" data-page="reports"><i></i> <span>Reports</span></a>
   <a href="create_user.php" class="nav-link <?php echo $current_page === 'create_user' ? 'active' : ''; ?>" data-page="create_user"><i></i> <span>Create User</span></a>
   <div class="sidebar-footer">
     <a href="logout.php" class="logout-btn"><span>Logout</span></a>

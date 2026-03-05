@@ -17,16 +17,18 @@ $user = ['full_name' => $_SESSION['admin_email'] ?? 'Admin'];
 $search_query = $_GET['search'] ?? '';
 
 $query  = "
-    SELECT s.*, u.full_name as submitted_by_name, o.org_name
+    SELECT s.*, u.full_name as submitted_by_name,
+           COALESCE(u.org_name, o.org_name) as org_name
     FROM submissions s
     LEFT JOIN users u ON s.user_id = u.user_id
-    LEFT JOIN organizations o ON s.org_id = o.org_id
+    LEFT JOIN users o ON s.org_id = o.user_id
     WHERE s.status IN ('pending', 'in_review')
 ";
 $params = [];
 
 if ($search_query) {
-    $query   .= " AND (s.title LIKE ? OR o.org_name LIKE ?)";
+    $query   .= " AND (s.title LIKE ? OR u.org_name LIKE ? OR o.org_name LIKE ?)";
+    $params[] = "%$search_query%";
     $params[] = "%$search_query%";
     $params[] = "%$search_query%";
 }
@@ -39,18 +41,6 @@ try {
     $submissions = [];
 }
 
-// Sample data shown only when DB is empty
-$sample_submissions = [
-    ['submission_id'=>1,'title'=>'New Library Computer Lab Setup',      'org_name'=>'Technology Department', 'status'=>'pending',   'submitted_by_name'=>'David Martinez','submitted_at'=>date('Y-m-d H:i:s',strtotime('-5 days')),'file_name'=>'lab_setup.docx'],
-    ['submission_id'=>2,'title'=>'Campus Safety Improvement Proposal',  'org_name'=>'Security Committee',    'status'=>'in_review', 'submitted_by_name'=>'Maria Cruz',    'submitted_at'=>date('Y-m-d H:i:s',strtotime('-3 days')),'file_name'=>'safety.pdf'],
-    ['submission_id'=>3,'title'=>'Budget Allocation for School Events',  'org_name'=>'Finance Board',         'status'=>'pending',   'submitted_by_name'=>'Robert Tanaka', 'submitted_at'=>date('Y-m-d H:i:s',strtotime('-1 day')), 'file_name'=>'budget.xlsx'],
-    ['submission_id'=>4,'title'=>'Renovation Plan - Student Center',     'org_name'=>'Facilities Management', 'status'=>'in_review', 'submitted_by_name'=>'Lisa Anderson', 'submitted_at'=>date('Y-m-d H:i:s',strtotime('-2 days')),'file_name'=>'renovation.docx'],
-    ['submission_id'=>5,'title'=>'Parking Expansion Initiative',         'org_name'=>'Transportation Services','status'=>'pending',   'submitted_by_name'=>'James Park',    'submitted_at'=>date('Y-m-d H:i:s',strtotime('-4 days')),'file_name'=>'parking.pdf'],
-];
-
-if (empty($submissions)) {
-    $submissions = $sample_submissions;
-}
 
 // Helper: safely build the openPreviewModal() onclick attribute
 function previewOnclick($s) {

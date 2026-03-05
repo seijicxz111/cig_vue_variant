@@ -92,7 +92,9 @@ class SubmissionAPI {
      * Approve Submission
      */
     public function approveSubmission($submission_id) {
-        return $this->updateStatus($submission_id, 'approved');
+        $result = $this->updateStatus($submission_id, 'approved');
+        $this->insertNotification($submission_id, 'approved');
+        return $result;
     }
 
     /**
@@ -101,7 +103,44 @@ class SubmissionAPI {
     public function rejectSubmission($submission_id, $reason = '') {
         // rejection_reason column does not exist in schema — only update status
         $data = ['status' => 'rejected', 'updated_at' => date('Y-m-d H:i:s')];
-        return $this->db->update('submissions', $data, 'submission_id = ?', [$submission_id]);
+        $result = $this->db->update('submissions', $data, 'submission_id = ?', [$submission_id]);
+        $this->insertNotification($submission_id, 'rejected');
+        return $result;
+    }
+
+    /**
+     * Insert Notification for approve/reject
+     */
+    private function insertNotification($submission_id, $action) {
+        try {
+            $sub = $this->db->fetchRow(
+                "SELECT title, user_id FROM submissions WHERE submission_id = ?",
+                [$submission_id]
+            );
+            if (!$sub) return;
+
+            $title   = $sub['title'];
+            $userId  = $sub['user_id'];
+
+            if ($action === 'approved') {
+                $notifTitle   = 'Document Approved';
+                $notifMessage = "Your submission \"{$title}\" has been approved.";
+                $notifType    = 'success';
+            } else {
+                $notifTitle   = 'Document Rejected';
+                $notifMessage = "Your submission \"{$title}\" has been rejected. Please review and resubmit.";
+                $notifType    = 'error';
+            }
+
+            $this->db->insert('notifications', [
+                'user_id' => $userId,
+                'title'   => $notifTitle,
+                'message' => $notifMessage,
+                'type'    => $notifType,
+            ]);
+        } catch (Exception $e) {
+            error_log('Notification insert failed: ' . $e->getMessage());
+        }
     }
 
     /**

@@ -42,39 +42,82 @@ if ($action && $target_id) {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username  = trim($_POST['username'] ?? '');
-    $email     = trim($_POST['email'] ?? '');
-    $full_name = trim($_POST['full_name'] ?? '');
-    $role      = $_POST['role'] ?? 'user';
-    $password  = $_POST['password'] ?? '';
-    $confirm   = $_POST['confirm_password'] ?? '';
+$message = '';
+$msgType = '';
 
-    if (empty($username) || empty($email) || empty($full_name) || empty($password)) {
-        $message = 'All fields are required.'; $msgType = 'error';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $message = 'Invalid email address.'; $msgType = 'error';
-    } elseif ($password !== $confirm) {
-        $message = 'Passwords do not match.'; $msgType = 'error';
-    } elseif (strlen($password) < 8) {
-        $message = 'Password must be at least 8 characters.'; $msgType = 'error';
-    } else {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // ── Shared fields ──────────────────────────────────────────
+    $full_name   = trim($_POST['full_name']   ?? '');
+    $email       = trim($_POST['email']       ?? '');
+    $phone       = trim($_POST['phone']       ?? '');
+    // ── User-specific ──────────────────────────────────────────
+    $username    = trim($_POST['username']    ?? '');
+    $role        = $_POST['role']             ?? 'user';
+    $password    = $_POST['password']         ?? '';
+    $confirm     = $_POST['confirm_password'] ?? '';
+    // ── Org-specific ───────────────────────────────────────────
+    $org_name    = trim($_POST['org_name']    ?? '');
+    $org_code    = trim($_POST['org_code']    ?? '');
+    $description = trim($_POST['description'] ?? '');
+
+    $errors = [];
+
+    // Required
+    if (empty($full_name))  $errors[] = 'Full name is required.';
+    if (empty($email))      $errors[] = 'Email is required.';
+    if (empty($username))   $errors[] = 'Username is required.';
+    if (empty($password))   $errors[] = 'Password is required.';
+    if (empty($org_name))   $errors[] = 'Organization name is required.';
+    if (empty($org_code))   $errors[] = 'Organization code is required.';
+
+    if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL))
+        $errors[] = 'Invalid email address.';
+    if ($password !== $confirm) $errors[] = 'Passwords do not match.';
+    if (strlen($password) > 0 && strlen($password) < 8)
+        $errors[] = 'Password must be at least 8 characters.';
+
+    if (empty($errors)) {
+        // Check duplicate user
         $check = $conn->prepare("SELECT user_id FROM users WHERE username = ? OR email = ?");
         $check->bind_param("ss", $username, $email);
         $check->execute(); $check->store_result();
-        if ($check->num_rows > 0) {
-            $message = 'Username or email already exists.'; $msgType = 'error';
-        } else {
+        if ($check->num_rows > 0) $errors[] = 'Username or email already exists.';
+    }
+    if (empty($errors)) {
+        // Check duplicate org code in users table
+        $chkOrg = $conn->prepare("SELECT user_id FROM users WHERE org_code = ?");
+        $chkOrg->bind_param("s", $org_code);
+        $chkOrg->execute(); $chkOrg->store_result();
+        if ($chkOrg->num_rows > 0) $errors[] = 'Organization code already exists.';
+    }
+
+    if (!empty($errors)) {
+        $message = implode('<br>', $errors);
+        $msgType = 'error';
+    } else {
+        $conn->begin_transaction();
+        try {
+            // Insert user with org fields all in one row
             $password_hash = password_hash($password, PASSWORD_BCRYPT);
-            $stmt = $conn->prepare("INSERT INTO users (username, email, full_name, role, password_hash, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', NOW())");
-            $stmt->bind_param("sssss", $username, $email, $full_name, $role, $password_hash);
-            if ($stmt->execute()) {
-                $new_id  = $conn->insert_id;
-                $message = "User <strong>$full_name</strong> created successfully! (ID: $new_id, Role: $role)";
-                $msgType = 'success';
-            } else {
-                $message = 'Database error: ' . $conn->error; $msgType = 'error';
-            }
+            $stmtU = $conn->prepare(
+                "INSERT INTO users (username, email, full_name, role, password_hash, status,
+                                    org_name, org_code, description, contact_person, phone, created_at)
+                 VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, NOW())"
+            );
+            $stmtU->bind_param(
+                "ssssssssss",
+                $username, $email, $full_name, $role, $password_hash,
+                $org_name, $org_code, $description, $full_name, $phone
+            );
+            $stmtU->execute();
+
+            $conn->commit();
+            $message = "User <strong>$full_name</strong> and organization <strong>$org_name</strong> created successfully!";
+            $msgType = 'success';
+        } catch (Exception $e) {
+            $conn->rollback();
+            $message = 'Transaction failed: ' . $e->getMessage();
+            $msgType = 'error';
         }
     }
 }
@@ -642,6 +685,23 @@ $users_result = $conn->query("SELECT user_id, username, email, full_name, role, 
     .cu-btn-submit { padding: 12px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; font-family: 'Poppins', sans-serif; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 15px rgba(16,185,129,0.3); }
     .cu-btn-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16,185,129,0.4); }
 
+    .cu-section-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #047857;
+      background: linear-gradient(90deg, rgba(16,185,129,0.1), transparent);
+      border-left: 3px solid #10b981;
+      padding: 6px 10px;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 14px;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
     /* ══════════════════════════════════════════
        RESPONSIVE — from navbar.css / organizations.css
     ══════════════════════════════════════════ */
@@ -686,8 +746,8 @@ $user_name    = $_SESSION['admin_email'] ?? 'Admin';
       <span><strong>Security Notice:</strong> Restrict access to this page after creating accounts. Do not leave it publicly accessible.</span>
     </div>
 
-    <button onclick="showCreateUser()" class="btn-action btn-view" style="margin-bottom:20px;">
-      <i class="bi bi-person-add"></i> Create New User
+    <button onclick="showCreateModal()" class="btn-action btn-view" style="margin-bottom:20px;">
+      <i class="bi bi-person-add"></i> Create User &amp; Organization
     </button>
 
     <div class="table-container">
@@ -756,32 +816,52 @@ $user_name    = $_SESSION['admin_email'] ?? 'Admin';
   <?php include 'footer.php'; ?>
 </div><!-- end .main -->
 
-<!-- Create User Modal -->
-<div id="createUserModal" class="cu-modal">
-  <div class="cu-modal-content">
+<!-- Unified Create Modal -->
+<div id="createModal" class="cu-modal">
+  <div class="cu-modal-content" style="max-width:660px;">
+
     <div class="cu-modal-header">
       <div>
-        <h2><i class="bi bi-person-add"></i> Create New User</h2>
-        <p>Fill in the details below to add a new user account</p>
+        <h2><i class="bi bi-person-add"></i> Create User &amp; Organization</h2>
+        <p>Fill in the details below — shared fields apply to both the user account and organization</p>
       </div>
-      <button class="cu-modal-close" onclick="closeCreateUser()">✕</button>
+      <button class="cu-modal-close" onclick="closeCreateModal()">✕</button>
     </div>
+
     <div class="cu-modal-body">
       <form method="POST">
+
+        <!-- ── SECTION: Shared ─────────────────────────────── -->
+        <div class="cu-section-label"><i class="fas fa-link"></i> Shared Information</div>
         <div class="cu-form-row">
           <div>
             <label class="cu-label" for="full_name">Full Name <span>*</span></label>
-            <input class="cu-input" type="text" name="full_name" id="full_name" placeholder="e.g. Maria Santos" value="<?= htmlspecialchars($_POST['full_name'] ?? '') ?>" required>
+            <input class="cu-input" type="text" name="full_name" id="full_name"
+              placeholder="e.g. Maria Santos"
+              value="<?= htmlspecialchars($_POST['full_name'] ?? '') ?>" required>
           </div>
-          <div>
-            <label class="cu-label" for="username">Username <span>*</span></label>
-            <input class="cu-input" type="text" name="username" id="username" placeholder="e.g. mariasantos" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
-          </div>
-        </div>
-        <div class="cu-form-row">
           <div>
             <label class="cu-label" for="email">Email Address <span>*</span></label>
-            <input class="cu-input" type="email" name="email" id="email" placeholder="e.g. maria@cig.edu.ph" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+            <input class="cu-input" type="email" name="email" id="email"
+              placeholder="e.g. maria@cig.edu.ph"
+              value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+          </div>
+        </div>
+        <div style="margin-bottom:18px;">
+          <label class="cu-label" for="phone">Phone Number</label>
+          <input class="cu-input" type="tel" name="phone" id="phone"
+            placeholder="+63-123-456-7890"
+            value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+        </div>
+
+        <!-- ── SECTION: User Account ──────────────────────── -->
+        <div class="cu-section-label"><i class="bi bi-person-fill"></i> User Account</div>
+        <div class="cu-form-row">
+          <div>
+            <label class="cu-label" for="username">Username <span>*</span></label>
+            <input class="cu-input" type="text" name="username" id="username"
+              placeholder="e.g. mariasantos"
+              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
           </div>
           <div>
             <label class="cu-label" for="role">Role <span>*</span></label>
@@ -794,17 +874,46 @@ $user_name    = $_SESSION['admin_email'] ?? 'Admin';
         <div class="cu-form-row">
           <div>
             <label class="cu-label" for="password">Password <span>*</span></label>
-            <input class="cu-input" type="password" name="password" id="password" placeholder="Min. 8 characters" required>
+            <input class="cu-input" type="password" name="password" id="password"
+              placeholder="Min. 8 characters" required>
           </div>
           <div>
             <label class="cu-label" for="confirm_password">Confirm Password <span>*</span></label>
-            <input class="cu-input" type="password" name="confirm_password" id="confirm_password" placeholder="Repeat password" required>
+            <input class="cu-input" type="password" name="confirm_password" id="confirm_password"
+              placeholder="Repeat password" required>
           </div>
         </div>
-        <div class="cu-modal-footer">
-          <button type="button" class="cu-btn-cancel" onclick="closeCreateUser()">Cancel</button>
-          <button type="submit" class="cu-btn-submit"><i class="bi bi-person-add"></i> Create User</button>
+
+        <!-- ── SECTION: Organization ──────────────────────── -->
+        <div class="cu-section-label"><i class="fas fa-building"></i> Organization</div>
+        <div class="cu-form-row">
+          <div>
+            <label class="cu-label" for="org_name">Organization Name <span>*</span></label>
+            <input class="cu-input" type="text" name="org_name" id="org_name"
+              placeholder="e.g. Student Government Association"
+              value="<?= htmlspecialchars($_POST['org_name'] ?? '') ?>" required>
+          </div>
+          <div>
+            <label class="cu-label" for="org_code">Code <span>*</span></label>
+            <input class="cu-input" type="text" name="org_code" id="org_code"
+              placeholder="e.g. SGA"
+              value="<?= htmlspecialchars($_POST['org_code'] ?? '') ?>" required>
+          </div>
         </div>
+        <div style="margin-bottom:18px;">
+          <label class="cu-label" for="description">Description</label>
+          <textarea class="cu-input" name="description" id="description"
+            placeholder="Brief description of the organization..."
+            style="height:75px;resize:none;"><?= htmlspecialchars($_POST['description'] ?? '') ?></textarea>
+        </div>
+
+        <div class="cu-modal-footer">
+          <button type="button" class="cu-btn-cancel" onclick="closeCreateModal()">Cancel</button>
+          <button type="submit" class="cu-btn-submit">
+            <i class="bi bi-person-add"></i> Create User &amp; Organization
+          </button>
+        </div>
+
       </form>
     </div>
   </div>
@@ -830,9 +939,16 @@ function toggleNotificationPanel() {
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
-function showCreateUser() { document.getElementById('createUserModal').style.display = 'block'; }
-function closeCreateUser() { document.getElementById('createUserModal').style.display = 'none'; }
-window.addEventListener('click', e => { if (e.target === document.getElementById('createUserModal')) closeCreateUser(); });
+function showCreateModal() { document.getElementById('createModal').style.display = 'block'; }
+function closeCreateModal() { document.getElementById('createModal').style.display = 'none'; }
+window.addEventListener('click', e => { if (e.target === document.getElementById('createModal')) closeCreateModal(); });
+
+// Legacy aliases
+function showCreateUser() { showCreateModal(); }
+function closeCreateUser() { closeCreateModal(); }
+function showCreateOrg()  { showCreateModal(); }
+function closeCreateOrg() { closeCreateModal(); }
+
 
 function confirmAction(action, userId, name) {
   const configs = {
@@ -856,7 +972,7 @@ function closeModal() { document.getElementById('modalOverlay').classList.remove
 document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
 
 <?php if ($msgType === 'error' && $_SERVER['REQUEST_METHOD'] === 'POST'): ?>
-window.addEventListener('DOMContentLoaded', () => showCreateUser());
+window.addEventListener('DOMContentLoaded', () => showCreateModal());
 <?php endif; ?>
 </script>
 </body>
