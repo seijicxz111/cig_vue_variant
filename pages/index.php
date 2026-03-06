@@ -69,8 +69,8 @@ while ($row = mysqli_fetch_assoc($result)) {
   <!-- WELCOME SECTION -->
   <div class="welcome-section">
     <div class="welcome-content">
-      <h1>Welcome to CIG</h1>
-      <p class="welcome-subtitle">Council of Internal Governance</p>
+      <h1>Welcome to OSAS</h1>
+      <p class="welcome-subtitle">Office of Student Affairs and Services</p>
       <p class="welcome-description">Manage submissions, reviews, and organizational governance with ease. Stay updated with the latest announcements and maintain transparency across all departments.</p>
     </div>
     <div class="welcome-stats">

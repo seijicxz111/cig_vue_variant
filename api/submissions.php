@@ -91,9 +91,10 @@ class SubmissionAPI {
     /**
      * Approve Submission
      */
-    public function approveSubmission($submission_id) {
+    public function approveSubmission($submission_id, $remarks = '') {
         $result = $this->updateStatus($submission_id, 'approved');
-        $this->insertNotification($submission_id, 'approved');
+        $this->saveRemarks($submission_id, $remarks);
+        $this->insertNotification($submission_id, 'approved', $remarks);
         return $result;
     }
 
@@ -101,17 +102,48 @@ class SubmissionAPI {
      * Reject Submission
      */
     public function rejectSubmission($submission_id, $reason = '') {
-        // rejection_reason column does not exist in schema — only update status
         $data = ['status' => 'rejected', 'updated_at' => date('Y-m-d H:i:s')];
         $result = $this->db->update('submissions', $data, 'submission_id = ?', [$submission_id]);
-        $this->insertNotification($submission_id, 'rejected');
+        $this->saveRemarks($submission_id, $reason);
+        $this->insertNotification($submission_id, 'rejected', $reason);
         return $result;
     }
 
     /**
-     * Insert Notification for approve/reject
+     * Save remarks to reviews table (upsert — insert or update existing row)
      */
-    private function insertNotification($submission_id, $action) {
+    private function saveRemarks($submission_id, $remarks) {
+        if (trim($remarks) === '') return;
+        try {
+            $admin_id = $_SESSION['admin_id'] ?? 1;
+            // Check if a review row already exists for this submission
+            $existing = $this->db->fetchRow(
+                "SELECT review_id FROM reviews WHERE submission_id = ?",
+                [$submission_id]
+            );
+            if ($existing) {
+                $this->db->update('reviews',
+                    ['feedback' => $remarks, 'reviewed_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')],
+                    'submission_id = ?',
+                    [$submission_id]
+                );
+            } else {
+                $this->db->insert('reviews', [
+                    'submission_id' => $submission_id,
+                    'reviewer_id'   => $admin_id,
+                    'feedback'      => $remarks,
+                    'reviewed_at'   => date('Y-m-d H:i:s'),
+                ]);
+            }
+        } catch (Exception $e) {
+            error_log('Remarks save failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Insert Notification for approve/reject (with optional remarks)
+     */
+    private function insertNotification($submission_id, $action, $remarks = '') {
         try {
             $sub = $this->db->fetchRow(
                 "SELECT title, user_id FROM submissions WHERE submission_id = ?",
@@ -119,16 +151,18 @@ class SubmissionAPI {
             );
             if (!$sub) return;
 
-            $title   = $sub['title'];
-            $userId  = $sub['user_id'];
+            $title  = $sub['title'];
+            $userId = $sub['user_id'];
 
             if ($action === 'approved') {
                 $notifTitle   = 'Document Approved';
                 $notifMessage = "Your submission \"{$title}\" has been approved.";
+                if ($remarks) $notifMessage .= " Remarks: {$remarks}";
                 $notifType    = 'success';
             } else {
                 $notifTitle   = 'Document Rejected';
                 $notifMessage = "Your submission \"{$title}\" has been rejected. Please review and resubmit.";
+                if ($remarks) $notifMessage .= " Reason: {$remarks}";
                 $notifType    = 'error';
             }
 
@@ -207,7 +241,8 @@ try {
 
             if ($action === 'approve' && $submission_id) {
                 try {
-                    $api->approveSubmission($submission_id);
+                    $remarks = $_POST['reason'] ?? '';
+                    $api->approveSubmission($submission_id, $remarks);
                     echo json_encode(['success' => true, 'message' => 'Submission approved successfully']);
                 } catch (Exception $e) {
                     echo json_encode(['success' => false, 'message' => $e->getMessage()]);

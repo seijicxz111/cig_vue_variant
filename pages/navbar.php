@@ -19,7 +19,7 @@ $notifications = $notifications ?? [];
 
 <!-- NAVBAR (Sidebar + Topbar) -->
 <div class="sidebar">
-  <a href="index.php" class="logo-link <?php echo basename($_SERVER['PHP_SELF']) === 'index.php' ? 'active' : ''; ?>" data-page="home"><img src="../assets/cigorig.png" alt="Logo" class="logo"></a>
+  <a href="index.php" class="logo-link <?php echo basename($_SERVER['PHP_SELF']) === 'index.php' ? 'active' : ''; ?>" data-page="home"><img src="../assets/osas2.png" alt="Logo" class="logo"></a>
   <a href="dashboard.php" class="nav-link <?php echo $current_page === 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><i></i> <span>Dashboard</span></a>
   <a href="submissions.php" class="nav-link <?php echo $current_page === 'submissions' ? 'active' : ''; ?>" data-page="submissions"><i></i> <span>Submissions</span></a>
   <a href="review.php" class="nav-link <?php echo $current_page === 'review' ? 'active' : ''; ?>" data-page="review"><i></i> <span>Review & Approval</span></a>
@@ -34,7 +34,7 @@ $notifications = $notifications ?? [];
 <div class="main">
   <div class="topbar">
     <div class="topbar-left">
-      <div id="cig">COUNCIL OF INTERNAL GOVERNANCE<p class="cig-subtitle">Pamantasan ng Lungsod ng San Pablo</p></div>
+      <div id="cig">Office of Student Affairs and Services<p class="cig-subtitle">Pamantasan ng Lungsod ng San Pablo</p></div>
     </div>
     <div class="topbar-right">
       <div class="notification-bell" onclick="toggleNotificationPanel()">

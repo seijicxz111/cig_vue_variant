@@ -166,33 +166,50 @@ function _bindModalActions(id, status) {
 
 
 // ============================================================
-//  APPROVE
+//  APPROVE  →  opens remarks modal first
 // ============================================================
 function approveSubmission(id) {
-  _showConfirm(
-    '<i class="fas fa-check-circle" style="color:#10b981"></i> Approve Submission',
-    'Are you sure you want to <strong>approve</strong> this submission?',
-    'Approve', 'confirm-approve',
-    () => {
-      _callApi('approve', id)
-        .then(data => {
-          if (data.success) { _showToast('Submission approved successfully!', 'success'); _removeRow(id); }
-          else              { _showToast(data.message || 'Failed to approve.', 'error'); }
-        })
-        .catch(() => _showToast('Network error. Please try again.', 'error'));
-    }
-  );
+  _showRemarksModal(id, 'approve');
 }
 
 
 // ============================================================
-//  REJECT  →  opens comment modal first
+//  REJECT  →  opens remarks modal (required)
 // ============================================================
 function rejectSubmission(id) {
-  _showRejectModal(id);
+  _showRemarksModal(id, 'reject');
 }
 
-function _showRejectModal(id) {
+// ============================================================
+//  UNIFIED REMARKS MODAL  (approve = optional, reject = required)
+// ============================================================
+function _showRemarksModal(id, mode) {
+  const isReject   = mode === 'reject';
+  const accentColor = isReject ? '#ef4444' : '#10b981';
+  const headerBg    = isReject ? '#fef2f2' : '#f0fdf4';
+  const borderColor = isReject ? '#fecaca' : '#bbf7d0';
+  const icon        = isReject ? 'fa-times-circle' : 'fa-check-circle';
+  const title       = isReject ? 'Reject Submission' : 'Approve Submission';
+  const subtitle    = isReject
+    ? 'Provide a reason so the submitter can revise and resubmit.'
+    : 'Optionally add remarks for the submitter (e.g. what was good, what to note).';
+  const btnLabel    = isReject ? 'Reject Submission' : 'Approve Submission';
+  const btnClass    = isReject ? 'confirm-reject' : 'confirm-approve';
+  const required    = isReject ? '<span style="color:#ef4444">*</span>' : '<span style="color:#9ca3af">(optional)</span>';
+
+  const QUICK_REASONS = isReject ? [
+    'Incomplete documentation',
+    'Does not meet requirements',
+    'Duplicate submission',
+    'Incorrect format',
+    'Missing signatures or approvals',
+  ] : [
+    'Well-documented',
+    'Meets all requirements',
+    'Approved with minor notes',
+    'Good submission, no issues',
+  ];
+
   let overlay = document.getElementById('rejectCommentOverlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -200,36 +217,29 @@ function _showRejectModal(id) {
     document.body.appendChild(overlay);
   }
 
-  const QUICK_REASONS = [
-    'Incomplete documentation',
-    'Does not meet requirements',
-    'Duplicate submission',
-    'Incorrect format',
-    'Missing signatures or approvals',
-  ];
-
   overlay.innerHTML = `
     <div class="reject-modal-box">
-      <div class="reject-modal-header">
-        <span class="reject-modal-icon"><i class="fas fa-times-circle"></i></span>
+      <div class="reject-modal-header" style="background:${headerBg};border-bottom:1px solid ${borderColor};">
+        <span class="reject-modal-icon" style="color:${accentColor};"><i class="fas ${icon}"></i></span>
         <div>
-          <div class="reject-modal-title">Reject Submission</div>
-          <div class="reject-modal-subtitle">Provide a reason so the submitter can revise and resubmit.</div>
+          <div class="reject-modal-title">${title}</div>
+          <div class="reject-modal-subtitle">${subtitle}</div>
         </div>
         <button class="reject-modal-close" onclick="_closeRejectModal()">&times;</button>
       </div>
 
       <div class="reject-modal-body">
-        <div class="reject-quick-label">Quick reasons</div>
-        <div class="reject-quick-list">
-          ${QUICK_REASONS.map(r => `<button class="reject-quick-btn" onclick="_fillRejectReason('${r}')">${r}</button>`).join('')}
+        <div class="reject-quick-label">Quick ${isReject ? 'reasons' : 'remarks'}</div>
+        <div class="reject-quick-list" style="--accent:${accentColor};">
+          ${QUICK_REASONS.map(r => `<button class="reject-quick-btn" style="border-color:${accentColor}33;color:${accentColor};" onclick="_fillRejectReason('${r}')">${r}</button>`).join('')}
         </div>
 
         <label class="reject-textarea-label" for="rejectReasonText">
-          Rejection comment <span style="color:#ef4444">*</span>
+          ${isReject ? 'Rejection comment' : 'Remarks'} ${required}
         </label>
         <textarea id="rejectReasonText" class="reject-textarea"
-                  placeholder="Describe the issue and what the submitter should do to correct it…"
+                  style="--focus-color:${accentColor};"
+                  placeholder="${isReject ? 'Describe the issue and what the submitter should do to correct it…' : 'Add any notes or feedback for the submitter…'}"
                   maxlength="500" oninput="_updateRejectCharCount(this)"></textarea>
         <div class="reject-char-count"><span id="rejectCharCount">0</span> / 500</div>
       </div>
@@ -238,8 +248,8 @@ function _showRejectModal(id) {
         <button class="confirm-btn confirm-cancel" onclick="_closeRejectModal()">
           <i class="fas fa-arrow-left"></i> Cancel
         </button>
-        <button class="confirm-btn confirm-reject" id="rejectSubmitBtn" onclick="_submitRejection(${id})">
-          <i class="fas fa-times"></i> Reject Submission
+        <button class="confirm-btn ${btnClass}" id="rejectSubmitBtn" onclick="_submitAction(${id}, '${mode}')">
+          <i class="fas ${isReject ? 'fa-times' : 'fa-check'}"></i> ${btnLabel}
         </button>
       </div>
     </div>`;
@@ -267,11 +277,12 @@ function _closeRejectModal() {
   document.body.style.overflow = '';
 }
 
-function _submitRejection(id) {
-  const ta     = document.getElementById('rejectReasonText');
-  const reason = ta ? ta.value.trim() : '';
+function _submitAction(id, mode) {
+  const isReject = mode === 'reject';
+  const ta       = document.getElementById('rejectReasonText');
+  const reason   = ta ? ta.value.trim() : '';
 
-  if (!reason) {
+  if (isReject && !reason) {
     ta.classList.add('reject-textarea-error');
     ta.placeholder = 'A rejection reason is required before submitting.';
     ta.focus();
@@ -279,16 +290,19 @@ function _submitRejection(id) {
   }
 
   const btn = document.getElementById('rejectSubmitBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rejecting…'; }
+  if (btn) {
+    btn.disabled  = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${isReject ? 'Rejecting…' : 'Approving…'}`;
+  }
 
-  _callApiWithReason('reject', id, reason)
+  _callApiWithReason(mode === 'approve' ? 'approve' : 'reject', id, reason)
     .then(data => {
       _closeRejectModal();
       if (data.success) {
-        _showToast('Submission rejected and moved to archive.', 'success');
+        _showToast(isReject ? 'Submission rejected.' : 'Submission approved!', isReject ? 'error' : 'success');
         _removeRow(id);
       } else {
-        _showToast(data.message || 'Failed to reject.', 'error');
+        _showToast(data.message || 'Action failed.', 'error');
       }
     })
     .catch(() => {
